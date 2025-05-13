@@ -1,0 +1,88 @@
+# sentiment_analysis.py
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import re
+import nltk
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, confusion_matrix
+import streamlit as st
+
+nltk.download('stopwords')
+from nltk.corpus import stopwords
+from nltk.stem import PorterStemmer
+
+# Load dataset
+df = pd.read_csv('emotion_dataset.csv')  # Assume 'text' and 'emotion' columns
+
+# Check if the 'text' column exists, and rename it if necessary
+if 'text' not in df.columns:
+    # Assuming the text column might be named 'sentence' based on global variables
+    if 'sentence' in df.columns:
+        df.rename(columns={'sentence': 'text'}, inplace=True)
+    else:
+        raise KeyError("The DataFrame does not contain a 'text' or 'sentence' column.")
+
+# Data Cleaning
+stop_words = set(stopwords.words('english'))
+stemmer = PorterStemmer()
+print("\nDataFrame Head:")
+print(df.head())
+print("\nDataFrame Info:")
+def clean_text(text):
+    text = re.sub(r'[^a-zA-Z\s]', '', text.lower())
+    tokens = text.split()
+    tokens = [stemmer.stem(word) for word in tokens if word not in stop_words]
+    return ' '.join(tokens)
+
+df['clean_text'] = df['text'].apply(clean_text)
+
+# Visualize/EDA analysis on data distribution
+plt.figure(figsize=(10, 5))
+sns.countplot(data=df, x="emotion", order=df["emotion"].value_counts().index)
+plt.title("Distribution of Emotions")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.savefig("emotion_distribution.png")
+plt.show()
+
+# Feature extraction
+tfidf = TfidfVectorizer(max_features=5000)
+X = tfidf.fit_transform(df['clean_text'])
+y = df['emotion']
+
+# Split data
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Model training
+model = LogisticRegression(max_iter=200)
+model.fit(X_train, y_train)
+
+# Evaluation
+y_pred = model.predict(X_test)
+print("Classification Report:\n", classification_report(y_test, y_pred))
+print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Create and plot confusion matrix heatmap
+cm = confusion_matrix(y_test, y_pred, labels=model.classes_)
+plt.figure(figsize=(10, 7))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=model.classes_, yticklabels=model.classes_)
+plt.title("Confusion Matrix Heatmap")
+plt.xlabel("Predicted Emotion")
+plt.ylabel("True Emotion")
+plt.tight_layout()
+plt.savefig("confusion_matrix_heatmap.png")
+plt.show()
+
+# Optional: Save model and vectorizer
+import joblib
+joblib.dump(model, 'emotion_model.pkl')
+joblib.dump(tfidf, 'tfidf_vectorizer.pkl')
